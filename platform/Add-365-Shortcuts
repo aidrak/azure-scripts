@@ -1,0 +1,57 @@
+# Deploy-OfficeShortcutsTask.ps1
+
+$scriptRoot = "C:\ProgramData\Intune\Scripts"
+if (-not (Test-Path $scriptRoot)) { New-Item -Path $scriptRoot -ItemType Directory -Force | Out-Null }
+
+# Drop the script that will run at startup
+$scriptContent = @'
+Start-Sleep -Seconds 120
+
+$officePaths = @(
+    "${env:ProgramFiles}\Microsoft Office\root\Office16",
+    "${env:ProgramFiles(x86)}\Microsoft Office\root\Office16"
+)
+$officePath = $officePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $officePath) { exit }
+
+$publicDesktop = "$env:PUBLIC\Desktop"
+$WshShell = New-Object -ComObject WScript.Shell
+
+$apps = @{
+    "Word"    = "WINWORD.EXE"
+    "Excel"   = "EXCEL.EXE"
+    "Outlook" = "OUTLOOK.EXE"
+    "Access"  = "MSACCESS.EXE"
+    "Teams"   = $null
+}
+
+foreach ($app in $apps.GetEnumerator()) {
+    $shortcutPath = Join-Path $publicDesktop "$($app.Key).lnk"
+    
+    if ($app.Key -eq "Teams") {
+        $teamsPath = "$env:ProgramFiles\WindowsApps\MSTeams_*\ms-teams.exe"
+        $teamsExe = Get-Item $teamsPath -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($teamsExe -and -not (Test-Path $shortcutPath)) {
+            $shortcut = $WshShell.CreateShortcut($shortcutPath)
+            $shortcut.TargetPath = $teamsExe.FullName
+            $shortcut.Save()
+        }
+    }
+    else {
+        $exePath = Join-Path $officePath $app.Value
+        if ((Test-Path $exePath) -and -not (Test-Path $shortcutPath)) {
+            $shortcut = $WshShell.CreateShortcut($shortcutPath)
+            $shortcut.TargetPath = $exePath
+            $shortcut.Save()
+        }
+    }
+}
+'@
+
+Set-Content -Path "$scriptRoot\Create-OfficeShortcuts.ps1" -Value $scriptContent -Force
+
+# Register the scheduled task
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptRoot\Create-OfficeShortcuts.ps1`""
+$trigger = New-ScheduledTaskTrigger -AtStartup
+$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+Register-ScheduledTask -TaskName "Create Office 365 Shortcuts" -Action $action -Trigger $trigger -Principal $principal -Force
