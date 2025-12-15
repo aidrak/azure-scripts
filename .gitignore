@@ -1,5 +1,9 @@
 # Claude Code
 CLAUDE.md
+.claude/
+
+# History
+.history/
 
 # Secrets
 *.env
