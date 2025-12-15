@@ -1,0 +1,15 @@
+# Claude Code
+CLAUDE.md
+
+# Secrets
+*.env
+.env*
+secrets/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
